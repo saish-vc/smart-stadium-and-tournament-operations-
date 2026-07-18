@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PulsePoint — FIFA World Cup 2026 Stadium Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --turf-900:#0A2A20;
+    --turf-800:#0F3B2C;
+    --turf-700:#155239;
+    --line-500:#1E7A4C;
+    --amber-500:#FFB020;
+    --amber-600:#E89A0C;
+    --floodlight:#F4F7F1;
+    --surface:#FFFFFF;
+    --ink:#0A1F1A;
+    --ink-soft:#4B5F57;
+    --danger:#E4572E;
+    --ok:#2FAE6A;
+    --warn:#FFB020;
+    --radius:14px;
+    --font-display:'Archivo Black', sans-serif;
+    --font-body:'Inter', sans-serif;
+    --font-mono:'JetBrains Mono', monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--floodlight);color:var(--ink);font-family:var(--font-body);}
+  .app{max-width:1180px;margin:0 auto;padding:20px 20px 80px;}
+
+  /* Header: scoreboard */
+  .board{background:var(--turf-900);border-radius:20px;padding:22px 26px;color:var(--floodlight);position:relative;overflow:hidden;box-shadow:0 12px 32px rgba(10,42,32,0.25);}
+  .board::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(90deg, rgba(255,255,255,0.035) 0 2px, transparent 2px 40px);pointer-events:none;}
+  .board-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;}
+  .brand{display:flex;align-items:center;gap:12px;}
+  .brand-mark{width:38px;height:38px;border-radius:8px;background:var(--amber-500);display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-weight:700;color:var(--turf-900);font-size:14px;transform:rotate(-4deg);}
+  .brand-name{font-family:var(--font-display);font-size:20px;letter-spacing:0.5px;}
+  .brand-sub{font-family:var(--font-mono);font-size:11px;color:#B9D3C4;letter-spacing:1.5px;text-transform:uppercase;margin-top:2px;}
+  .clock{font-family:var(--font-mono);text-align:right;}
+  .clock-time{font-size:26px;font-weight:700;color:var(--amber-500);}
+  .clock-label{font-size:11px;color:#B9D3C4;letter-spacing:1px;text-transform:uppercase;}
+  .venue-strip{margin-top:18px;display:flex;gap:10px;flex-wrap:wrap;font-family:var(--font-mono);font-size:12px;}
+  .chip{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.14);padding:6px 12px;border-radius:999px;display:flex;align-items:center;gap:6px;}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);}
+  .dot.warn{background:var(--warn);}
+  .dot.danger{background:var(--danger);}
+
+  /* Mode switch — substitution board style */
+  .subboard{display:flex;gap:0;margin:22px 0 24px;background:var(--turf-800);border-radius:12px;padding:5px;width:fit-content;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.06);}
+  .sub-btn{font-family:var(--font-mono);font-weight:700;font-size:13px;letter-spacing:1px;text-transform:uppercase;padding:11px 22px;border:none;background:transparent;color:#9FBBAD;border-radius:8px;cursor:pointer;transition:all .2s;}
+  .sub-btn.active{background:var(--amber-500);color:var(--turf-900);}
+
+  .grid{display:grid;grid-template-columns:1.3fr 1fr;gap:18px;}
+  @media(max-width:860px){.grid{grid-template-columns:1fr;}}
+
+  .card{background:var(--surface);border-radius:var(--radius);padding:20px;box-shadow:0 2px 10px rgba(10,42,32,0.06);border:1px solid rgba(10,42,32,0.06);}
+  .card h3{font-family:var(--font-display);font-size:15px;margin:0 0 4px;letter-spacing:0.3px;}
+  .card .eyebrow{font-family:var(--font-mono);font-size:10.5px;color:var(--line-500);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;}
+  .card p.desc{color:var(--ink-soft);font-size:13px;margin:0 0 14px;line-height:1.5;}
+
+  /* Chat */
+  .chat-log{height:280px;overflow-y:auto;background:var(--floodlight);border-radius:10px;padding:14px;margin-bottom:12px;display:flex;flex-direction:column;gap:10px;}
+  .msg{max-width:82%;padding:10px 13px;border-radius:12px;font-size:13.5px;line-height:1.5;}
+  .msg.user{align-self:flex-end;background:var(--turf-800);color:#fff;border-bottom-right-radius:3px;}
+  .msg.ai{align-self:flex-start;background:#fff;border:1px solid rgba(10,42,32,0.1);border-bottom-left-radius:3px;}
+  .msg.ai .tag{font-family:var(--font-mono);font-size:9.5px;color:var(--line-500);letter-spacing:1px;display:block;margin-bottom:4px;text-transform:uppercase;}
+  .chat-row{display:flex;gap:8px;}
+  .lang-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
+  .lang-pill{font-family:var(--font-mono);font-size:11px;padding:5px 10px;border-radius:999px;border:1px solid rgba(10,42,32,0.15);background:#fff;cursor:pointer;color:var(--ink-soft);}
+  .lang-pill.active{background:var(--turf-900);color:#fff;border-color:var(--turf-900);}
+  input[type=text],textarea,select{width:100%;font-family:var(--font-body);font-size:13.5px;padding:11px 13px;border-radius:9px;border:1px solid rgba(10,42,32,0.15);background:#fff;color:var(--ink);}
+  input[type=text]:focus,textarea:focus,select:focus{outline:2px solid var(--amber-500);outline-offset:1px;}
+  .btn{font-family:var(--font-mono);font-weight:700;font-size:12.5px;letter-spacing:0.5px;text-transform:uppercase;padding:11px 16px;border-radius:9px;border:none;background:var(--turf-900);color:#fff;cursor:pointer;transition:transform .1s;}
+  .btn:hover{transform:translateY(-1px);}
+  .btn.amber{background:var(--amber-500);color:var(--turf-900);}
+  .btn:disabled{opacity:0.55;cursor:wait;}
+  .btn.ghost{background:transparent;border:1px solid rgba(10,42,32,0.2);color:var(--ink);}
+
+  /* Zones heatmap */
+  .zones{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px;}
+  .zone{border-radius:9px;padding:10px 8px;text-align:center;cursor:pointer;font-family:var(--font-mono);border:2px solid transparent;transition:.15s;}
+  .zone:hover{transform:translateY(-2px);}
+  .zone.sel{border-color:var(--turf-900);}
+  .zone .z-name{font-size:11px;font-weight:700;}
+  .zone .z-pct{font-size:17px;font-weight:700;margin-top:2px;}
+  .zone .z-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.5px;opacity:.85;}
+  .z-low{background:#DFF3E6;color:#1B6B41;}
+  .z-med{background:#FFF1D2;color:#8A5C00;}
+  .z-high{background:#FBDCD3;color:#B4351A;}
+
+  .rec-box{background:var(--floodlight);border-left:3px solid var(--amber-500);border-radius:8px;padding:12px 14px;font-size:13px;line-height:1.55;min-height:40px;white-space:pre-wrap;}
+  .rec-box .tag{font-family:var(--font-mono);font-size:9.5px;color:var(--line-500);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:5px;}
+
+  .feed{display:flex;flex-direction:column;gap:9px;max-height:230px;overflow-y:auto;margin-bottom:12px;}
+  .feed-item{display:flex;gap:10px;padding:10px 12px;border-radius:9px;background:var(--floodlight);align-items:flex-start;}
+  .sev{width:8px;height:8px;border-radius:50%;margin-top:5px;flex-shrink:0;}
+  .sev.low{background:var(--ok);} .sev.med{background:var(--warn);} .sev.high{background:var(--danger);}
+  .feed-txt{font-size:12.5px;line-height:1.4;}
+  .feed-time{font-family:var(--font-mono);font-size:10px;color:var(--ink-soft);}
+
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .stat{background:var(--turf-800);color:#fff;border-radius:10px;padding:14px;}
+  .stat .num{font-family:var(--font-display);font-size:22px;color:var(--amber-500);}
+  .stat .lbl{font-family:var(--font-mono);font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#B9D3C4;margin-top:2px;}
+
+  .hidden{display:none !important;}
+  ::-webkit-scrollbar{width:7px;} ::-webkit-scrollbar-thumb{background:rgba(10,42,32,0.2);border-radius:10px;}
+
+  .footer-note{text-align:center;font-family:var(--font-mono);font-size:10.5px;color:var(--ink-soft);margin-top:28px;letter-spacing:0.5px;}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="board">
+    <div class="board-top">
+      <div class="brand">
+        <div class="brand-mark">PP</div>
+        <div>
+          <div class="brand-name">PULSEPOINT</div>
+          <div class="brand-sub">GenAI Stadium Intelligence · FIFA World Cup 2026</div>
+        </div>
+      </div>
+      <div class="clock">
+        <div class="clock-time" id="clockTime">--:--:--</div>
+        <div class="clock-label">Kickoff +<span id="kickoffMin">62</span> min</div>
+      </div>
+    </div>
+    <div class="venue-strip">
+      <div class="chip"><span class="dot"></span>MetLife Stadium · East Rutherford</div>
+      <div class="chip"><span class="dot warn"></span>Gate C at 91% capacity</div>
+      <div class="chip"><span class="dot"></span>AI Concierge: 12 languages live</div>
+      <div class="chip"><span class="dot"></span>82,500 in attendance</div>
+    </div>
+  </div>
+
+  <div class="subboard">
+    <button class="sub-btn active" id="tabFanBtn" onclick="setMode('fan')">Fan Mode</button>
+    <button class="sub-btn" id="tabOpsBtn" onclick="setMode('ops')">Ops Mode</button>
+  </div>
+
+  <!-- ============ FAN MODE ============ -->
+  <div id="fanMode">
+    <div class="grid">
+      <div class="card">
+        <div class="eyebrow">AI Concierge</div>
+        <h3>Ask anything, in your language</h3>
+        <p class="desc">Wayfinding, accessibility, transport, food, or match info — answered instantly by an AI trained on this venue.</p>
+        <div class="lang-row" id="langRow"></div>
+        <div class="chat-log" id="chatLog">
+          <div class="msg ai"><span class="tag">PulsePoint AI</span>Welcome to MetLife Stadium! Ask me how to find your gate, the nearest accessible restroom, or the fastest way to the PATH train after the match.</div>
+        </div>
+        <div class="chat-row">
+          <input type="text" id="chatInput" placeholder="e.g. Where is the nearest sensory room to Section 128?" onkeydown="if(event.key==='Enter')sendChat()">
+          <button class="btn amber" id="sendBtn" onclick="sendChat()">Ask</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="eyebrow">Live Crowd Map</div>
+        <h3>Gate & concourse density</h3>
+        <p class="desc">Tap a zone for an AI-generated route recommendation that avoids congestion.</p>
+        <div class="zones" id="zoneGrid"></div>
+        <div class="rec-box" id="zoneRec"><span class="tag">Recommendation</span>Select a zone to get a live AI routing tip.</div>
+      </div>
+    </div>
+
+    <div class="grid" style="margin-top:18px;">
+      <div class="card">
+        <div class="eyebrow">Accessibility</div>
+        <h3>Request assistance</h3>
+        <p class="desc">Tell us what you need — the AI drafts a personalized assistance plan and routes it to volunteer staff.</p>
+        <select id="accessType" style="margin-bottom:8px;">
+          <option>Wheelchair escort</option>
+          <option>Sign language interpreter</option>
+          <option>Sensory-friendly space</option>
+          <option>Visual assistance / guide</option>
+          <option>Cognitive / autism support</option>
+        </select>
+        <input type="text" id="accessSeat" placeholder="Your section, e.g. 214" style="margin-bottom:8px;">
+        <button class="btn" id="accessBtn" onclick="requestAccess()">Generate assistance plan</button>
+        <div class="rec-box" id="accessOut" style="margin-top:12px;display:none;"></div>
+      </div>
+
+      <div class="card">
+        <div class="eyebrow">Sustainability</div>
+        <h3>Greenest way home</h3>
+        <p class="desc">Compare your transport options — the AI scores carbon impact and current crowd wait.</p>
+        <select id="transMode" style="margin-bottom:8px;">
+          <option>Rideshare</option>
+          <option>Personal car</option>
+          <option>Charter bus</option>
+          <option>Train / transit</option>
+          <option>Walking / bike</option>
+        </select>
+        <button class="btn" id="sustainBtn" onclick="getSustainTip()">Get AI recommendation</button>
+        <div class="rec-box" id="sustainOut" style="margin-top:12px;display:none;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ OPS MODE ============ -->
+  <div id="opsMode" class="hidden">
+    <div class="row2" style="margin-bottom:18px;">
+      <div class="stat"><div class="num">82,500</div><div class="lbl">Attendance</div></div>
+      <div class="stat"><div class="num">3</div><div class="lbl">Active alerts</div></div>
+      <div class="stat"><div class="num">146</div><div class="lbl">Volunteers on shift</div></div>
+      <div class="stat"><div class="num">91%</div><div class="lbl">Peak gate load (C)</div></div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <div class="eyebrow">Operational Feed</div>
+        <h3>Live incidents & sensor events</h3>
+        <p class="desc">Simulated feed from gate sensors, volunteer radios, and crowd cameras.</p>
+        <div class="feed" id="opsFeed"></div>
+        <button class="btn amber" id="briefBtn" onclick="generateBriefing()">Generate AI shift briefing</button>
+        <div class="rec-box" id="briefOut" style="margin-top:12px;display:none;"></div>
+      </div>
+
+      <div class="card">
+        <div class="eyebrow">Decision Support</div>
+        <h3>Incident → recommended action</h3>
+        <p class="desc">Pick a live incident and let the AI draft the response protocol for command staff.</p>
+        <select id="incidentSelect"></select>
+        <button class="btn" id="incidentBtn" onclick="getIncidentAction()" style="margin-top:8px;">Get AI response plan</button>
+        <div class="rec-box" id="incidentOut" style="margin-top:12px;display:none;"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-note">PulsePoint demo · AI responses generated live via Claude · Crowd, incident & attendance data simulated for this prototype</div>
+</div>
+
+<script>
+/* ---------- clock ---------- */
+function tickClock(){
+  document.getElementById('clockTime').textContent = new Date().toLocaleTimeString('en-US',{hour12:false});
+}
+setInterval(tickClock,1000); tickClock();
+
+/* ---------- mode switch ---------- */
+function setMode(m){
+  document.getElementById('fanMode').classList.toggle('hidden', m!=='fan');
+  document.getElementById('opsMode').classList.toggle('hidden', m!=='ops');
+  document.getElementById('tabFanBtn').classList.toggle('active', m==='fan');
+  document.getElementById('tabOpsBtn').classList.toggle('active', m==='ops');
+}
+
+/* ---------- languages ---------- */
+const languages = ['English','Español','Português','Français','中文','日本語','한국어','العربية','Deutsch','हिन्दी'];
+let currentLang = 'English';
+const langRow = document.getElementById('langRow');
+languages.forEach(l=>{
+  const b=document.createElement('button');
+  b.className='lang-pill'+(l===currentLang?' active':'');
+  b.textContent=l;
+  b.onclick=()=>{currentLang=l;[...langRow.children].forEach(c=>c.classList.remove('active'));b.classList.add('active');};
+  langRow.appendChild(b);
+});
+
+/* ---------- generic AI call ----------
+   Goes through OUR OWN backend (/api/generate) so the NVIDIA NIM API key
+   never touches the browser. See api/generate.js (Vercel) or server.js (Express). */
+async function callClaude(systemPrompt, userPrompt){
+  const response = await fetch("/api/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ system: systemPrompt, prompt: userPrompt })
+  });
+  if(!response.ok){
+    const errBody = await response.json().catch(()=>({}));
+    throw new Error(errBody.error || `Request failed (${response.status})`);
+  }
+  const data = await response.json();
+  return data.text || "Sorry, I couldn't generate a response just now.";
+}
+
+/* ---------- Fan chat ---------- */
+const chatLog = document.getElementById('chatLog');
+function addMsg(text, cls, tag){
+  const d=document.createElement('div');
+  d.className='msg '+cls;
+  if(tag){const t=document.createElement('span');t.className='tag';t.textContent=tag;d.appendChild(t);}
+  const p=document.createElement('div');p.textContent=text;d.appendChild(p);
+  chatLog.appendChild(d); chatLog.scrollTop=chatLog.scrollHeight;
+}
+async function sendChat(){
+  const input=document.getElementById('chatInput');
+  const q=input.value.trim(); if(!q) return;
+  addMsg(q,'user'); input.value='';
+  const btn=document.getElementById('sendBtn'); btn.disabled=true; btn.textContent='...';
+  addMsg('Thinking…','ai','PulsePoint AI');
+  const thinkingNode = chatLog.lastChild;
+  try{
+    const sys = `You are PulsePoint AI, the official venue concierge for MetLife Stadium during the FIFA World Cup 2026. Answer the fan's question helpfully and specifically about stadium navigation, gates, seating, accessibility, food, transport, or match-day logistics. Invent plausible, concrete venue details (gate letters, section numbers, walking times) since this is a live demo. Reply in ${currentLang}. Keep it to 2-4 short sentences, warm and practical tone.`;
+    const answer = await callClaude(sys, q);
+    chatLog.removeChild(thinkingNode);
+    addMsg(answer,'ai','PulsePoint AI');
+  }catch(e){
+    chatLog.removeChild(thinkingNode);
+    addMsg('I ran into a connection issue — please try again in a moment.','ai','PulsePoint AI');
+  }
+  btn.disabled=false; btn.textContent='Ask';
+}
+
+/* ---------- zones / crowd map ---------- */
+const zones = [
+  {name:'Gate A', pct:38}, {name:'Gate B', pct:64}, {name:'Gate C', pct:91}, {name:'Gate D', pct:22},
+  {name:'Concourse N', pct:55}, {name:'Concourse S', pct:47}, {name:'Fan Zone', pct:78}, {name:'Transit Hub', pct:69}
+];
+const zoneGrid=document.getElementById('zoneGrid');
+function levelClass(p){return p>=75?'z-high':p>=45?'z-med':'z-low';}
+zones.forEach((z,i)=>{
+  const el=document.createElement('div');
+  el.className='zone '+levelClass(z.pct);
+  el.id='zone-'+i;
+  el.innerHTML=`<div class="z-name">${z.name}</div><div class="z-pct">${z.pct}%</div><div class="z-lbl">capacity</div>`;
+  el.onclick=()=>selectZone(i);
+  zoneGrid.appendChild(el);
+});
+async function selectZone(i){
+  [...zoneGrid.children].forEach(c=>c.classList.remove('sel'));
+  document.getElementById('zone-'+i).classList.add('sel');
+  const z=zones[i];
+  const box=document.getElementById('zoneRec');
+  box.innerHTML='<span class="tag">Recommendation</span>Generating route guidance…';
+  const sys = "You are a stadium crowd-flow AI at MetLife Stadium during FIFA World Cup 2026. Given a zone name and its current capacity percentage, give a 2-sentence practical recommendation for a fan: whether to use this zone now or an alternative, and why. Be specific and concise.";
+  try{
+    const answer = await callClaude(sys, `Zone: ${z.name}, current capacity: ${z.pct}%.`);
+    box.innerHTML = '<span class="tag">Recommendation</span>'+answer;
+  }catch(e){
+    box.innerHTML = '<span class="tag">Recommendation</span>Unable to fetch a live tip right now — as a general rule, avoid zones above 80% capacity and use the nearest alternate gate.';
+  }
+}
+
+/* ---------- accessibility ---------- */
+async function requestAccess(){
+  const type=document.getElementById('accessType').value;
+  const seat=document.getElementById('accessSeat').value || 'unspecified section';
+  const btn=document.getElementById('accessBtn'); btn.disabled=true; btn.textContent='Generating…';
+  const out=document.getElementById('accessOut'); out.style.display='block';
+  out.innerHTML='<span class="tag">Assistance plan</span>Drafting…';
+  const sys = "You are PulsePoint AI's accessibility coordinator for a FIFA World Cup 2026 stadium. Given an accessibility need and seating section, write a short, warm, concrete assistance plan (3-4 sentences): what will happen, roughly how long it takes, and how the fan will be met by a volunteer. Invent plausible details for this demo.";
+  try{
+    const answer = await callClaude(sys, `Need: ${type}. Section: ${seat}.`);
+    out.innerHTML = '<span class="tag">Assistance plan · routed to volunteer team</span>'+answer;
+  }catch(e){
+    out.innerHTML = '<span class="tag">Assistance plan</span>A volunteer will meet you at your section shortly.';
+  }
+  btn.disabled=false; btn.textContent='Generate assistance plan';
+}
+
+/* ---------- sustainability ---------- */
+async function getSustainTip(){
+  const mode=document.getElementById('transMode').value;
+  const btn=document.getElementById('sustainBtn'); btn.disabled=true; btn.textContent='Generating…';
+  const out=document.getElementById('sustainOut'); out.style.display='block';
+  out.innerHTML='<span class="tag">Greener option</span>Calculating…';
+  const sys = "You are a sustainability advisor for FIFA World Cup 2026 stadium transport. Given a fan's chosen transport mode, give a short 2-3 sentence response: an estimated relative carbon impact (low/medium/high, no need for exact figures), current wait/congestion context (invent plausibly), and one greener or faster alternative if relevant.";
+  try{
+    const answer = await callClaude(sys, `Chosen transport mode: ${mode}.`);
+    out.innerHTML = '<span class="tag">Greener option</span>'+answer;
+  }catch(e){
+    out.innerHTML = '<span class="tag">Greener option</span>Transit and shuttle options generally have the lowest footprint post-match.';
+  }
+  btn.disabled=false; btn.textContent='Get AI recommendation';
+}
+
+/* ---------- ops feed ---------- */
+const incidents = [
+  {sev:'high', txt:'Gate C queue exceeding 90% capacity — bottleneck at bag check lane 3.', time:'2 min ago'},
+  {sev:'med', txt:'Minor medical assist requested, Section 214 concourse.', time:'6 min ago'},
+  {sev:'low', txt:'Lost child reported near Fan Zone, reunited with family.', time:'11 min ago'},
+  {sev:'med', txt:'Rideshare pickup zone congestion building on Lot 15.', time:'14 min ago'},
+  {sev:'low', txt:'Wheelchair escort completed, Section 128 to accessible seating.', time:'19 min ago'},
+];
+const opsFeed=document.getElementById('opsFeed');
+incidents.forEach(it=>{
+  const el=document.createElement('div');
+  el.className='feed-item';
+  el.innerHTML=`<div class="sev ${it.sev}"></div><div><div class="feed-txt">${it.txt}</div><div class="feed-time">${it.time}</div></div>`;
+  opsFeed.appendChild(el);
+});
+const incidentSelect=document.getElementById('incidentSelect');
+incidents.forEach((it,i)=>{
+  const o=document.createElement('option'); o.value=i; o.textContent=it.txt; incidentSelect.appendChild(o);
+});
+
+async function getIncidentAction(){
+  const it=incidents[incidentSelect.value];
+  const btn=document.getElementById('incidentBtn'); btn.disabled=true; btn.textContent='Generating…';
+  const out=document.getElementById('incidentOut'); out.style.display='block';
+  out.innerHTML='<span class="tag">Response plan</span>Drafting…';
+  const sys = "You are an operational decision-support AI for FIFA World Cup 2026 stadium command staff. Given an incident description and severity, produce a short structured response plan: 1) immediate action, 2) who to notify, 3) follow-up check. Keep it under 80 words, plain and directive, no markdown headers.";
+  try{
+    const answer = await callClaude(sys, `Severity: ${it.sev}. Incident: ${it.txt}`);
+    out.innerHTML = '<span class="tag">Response plan</span>'+answer;
+  }catch(e){
+    out.innerHTML = '<span class="tag">Response plan</span>Dispatch nearest volunteer team, notify shift supervisor, and confirm resolution within 10 minutes.';
+  }
+  btn.disabled=false; btn.textContent='Get AI response plan';
+}
+
+async function generateBriefing(){
+  const btn=document.getElementById('briefBtn'); btn.disabled=true; btn.textContent='Generating…';
+  const out=document.getElementById('briefOut'); out.style.display='block';
+  out.innerHTML='<span class="tag">Shift briefing</span>Summarizing feed…';
+  const sys = "You are an operational intelligence AI summarizing a stadium's live incident feed for the next volunteer shift at a FIFA World Cup 2026 venue. Given a list of incidents, write a concise 3-4 sentence shift handoff briefing: overall status, top priority, and one proactive suggestion.";
+  const list = incidents.map(i=>`[${i.sev}] ${i.txt} (${i.time})`).join('\n');
+  try{
+    const answer = await callClaude(sys, list);
+    out.innerHTML = '<span class="tag">Shift briefing</span>'+answer;
+  }catch(e){
+    out.innerHTML = '<span class="tag">Shift briefing</span>Overall status stable. Priority: relieve Gate C congestion. Suggest opening auxiliary bag-check lane 4 proactively.';
+  }
+  btn.disabled=false; btn.textContent='Generate AI shift briefing';
+}
+</script>
+</body>
+</html>
