@@ -1,5 +1,5 @@
-// Express alternative to api/generate.js — use this for local dev,
-// Render, Railway, or any plain Node host. Not needed if you deploy to Vercel.
+// Express server — use this for local dev, Render, Railway, or any plain Node host.
+// Not needed if you deploy to Vercel (which uses api/generate.js and api/weather.js instead).
 //
 // Uses NVIDIA NIM (free, OpenAI-compatible). Get a key at https://build.nvidia.com
 
@@ -15,6 +15,49 @@ const NIM_MODEL = process.env.NIM_MODEL || 'meta/llama-3.1-8b-instruct';
 app.use(express.json());
 app.use(express.static(path.join(__dirname))); // serves index.html
 
+// ──────────────────────────────────────────
+// /api/weather — Real, live data via Open-Meteo (free, no key needed)
+// MetLife Stadium, East Rutherford, NJ
+// ──────────────────────────────────────────
+const WEATHER_LAT = 40.8136;
+const WEATHER_LON = -74.0745;
+const WMO = {
+  0: 'Clear sky', 1: 'Mainly clear', 2: 'Partly cloudy', 3: 'Overcast',
+  45: 'Fog', 48: 'Fog', 51: 'Light drizzle', 53: 'Drizzle', 55: 'Heavy drizzle',
+  61: 'Light rain', 63: 'Rain', 65: 'Heavy rain', 71: 'Light snow', 73: 'Snow',
+  75: 'Heavy snow', 80: 'Rain showers', 81: 'Rain showers', 82: 'Violent rain showers',
+  95: 'Thunderstorm', 96: 'Thunderstorm w/ hail', 99: 'Thunderstorm w/ hail',
+};
+
+app.get('/api/weather', async (req, res) => {
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${WEATHER_LAT}&longitude=${WEATHER_LON}&current=temperature_2m,precipitation,weather_code,wind_speed_10m&temperature_unit=fahrenheit&wind_speed_unit=mph`;
+    const r = await fetch(url);
+    const data = await r.json();
+    if (!r.ok || !data.current) throw new Error('Open-Meteo returned no current conditions');
+    const c = data.current;
+    const condition = WMO[c.weather_code] || 'Unknown';
+    res.json({
+      tempF: Math.round(c.temperature_2m),
+      condition,
+      windMph: Math.round(c.wind_speed_10m),
+      precipitationMm: c.precipitation,
+      isWet: c.precipitation > 0 || [51,53,55,61,63,65,80,81,82,95,96,99].includes(c.weather_code),
+      source: 'Open-Meteo (live)',
+      fetchedAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('Weather fetch error:', err.message);
+    res.json({
+      tempF: 72, condition: 'Unavailable', windMph: 0, precipitationMm: 0,
+      isWet: false, source: 'fallback (live fetch failed)', fetchedAt: new Date().toISOString(),
+    });
+  }
+});
+
+// ──────────────────────────────────────────
+// /api/generate — NVIDIA NIM proxy (keeps API key server-side)
+// ──────────────────────────────────────────
 app.post('/api/generate', async (req, res) => {
   if (!NVIDIA_API_KEY) {
     return res.status(500).json({ error: 'Server misconfigured: NVIDIA_API_KEY is not set.' });
@@ -50,7 +93,7 @@ app.post('/api/generate', async (req, res) => {
     clearTimeout(timeoutId);
     const data = await nimRes.json();
     if (!nimRes.ok) {
-      console.error('NVIDIA NIM API error response:', data);
+      console.error('NVIDIA NIM API error:', nimRes.status, JSON.stringify(data));
       return res.status(nimRes.status).json({ error: data?.error?.message || data?.error || 'NVIDIA NIM API error' });
     }
     const text = data?.choices?.[0]?.message?.content || '';

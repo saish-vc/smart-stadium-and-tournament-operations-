@@ -2,8 +2,7 @@
 // Keeps the NVIDIA NIM API key server-side. The frontend never sees it.
 //
 // NVIDIA NIM (build.nvidia.com) is free, requires no credit card, and
-// exposes an OpenAI-compatible /v1/chat/completions endpoint — so this
-// is a near drop-in replacement for the Anthropic Messages API.
+// exposes an OpenAI-compatible /v1/chat/completions endpoint.
 // Get a key (starts with "nvapi-") at https://build.nvidia.com
 
 const NIM_MODEL = process.env.NIM_MODEL || 'meta/llama-3.1-8b-instruct';

@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PulsePoint — FIFA World Cup 2026 Stadium Intelligence</title>
+<meta name="description" content="PulsePoint is a GenAI stadium intelligence platform for FIFA World Cup 2026 — multilingual AI concierge, live crowd maps, accessibility planning, sustainability scoring, and operational decision support.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
@@ -133,6 +134,7 @@
       <div class="chip"><span class="dot warn"></span>Gate C at 91% capacity</div>
       <div class="chip"><span class="dot"></span>AI Concierge: 12 languages live</div>
       <div class="chip"><span class="dot"></span>82,500 in attendance</div>
+      <div class="chip" id="weatherChip"><span class="dot"></span>Loading live weather…</div>
     </div>
   </div>
 
@@ -160,7 +162,7 @@
 
       <div class="card">
         <div class="eyebrow">Live Crowd Map</div>
-        <h3>Gate & concourse density</h3>
+        <h3>Gate &amp; concourse density</h3>
         <p class="desc">Tap a zone for an AI-generated route recommendation that avoids congestion.</p>
         <div class="zones" id="zoneGrid"></div>
         <div class="rec-box" id="zoneRec"><span class="tag">Recommendation</span>Select a zone to get a live AI routing tip.</div>
@@ -213,7 +215,7 @@
     <div class="grid">
       <div class="card">
         <div class="eyebrow">Operational Feed</div>
-        <h3>Live incidents & sensor events</h3>
+        <h3>Live incidents &amp; sensor events</h3>
         <p class="desc">Simulated feed from gate sensors, volunteer radios, and crowd cameras.</p>
         <div class="feed" id="opsFeed"></div>
         <button class="btn amber" id="briefBtn" onclick="generateBriefing()">Generate AI shift briefing</button>
@@ -231,7 +233,7 @@
     </div>
   </div>
 
-  <div class="footer-note">PulsePoint demo · AI responses generated live via Claude · Crowd, incident & attendance data simulated for this prototype</div>
+  <div class="footer-note">PulsePoint demo · AI responses generated live via NVIDIA NIM · Crowd, incident &amp; attendance data simulated for this prototype · Weather: real live data via Open-Meteo</div>
 </div>
 
 <script>
@@ -261,10 +263,55 @@ languages.forEach(l=>{
   langRow.appendChild(b);
 });
 
+/* ---------- LIVE DATA: real weather (Open-Meteo, via our backend) ----------
+   This is a genuine external data source, not simulated. It feeds the rules
+   engine below so crowd/transport/incident logic reacts to real conditions. */
+let currentWeather = null;
+async function loadWeather(){
+  const chip = document.getElementById('weatherChip');
+  try{
+    const r = await fetch('/api/weather');
+    const w = await r.json();
+    currentWeather = w;
+    const wetTag = w.isWet ? ' · wet conditions' : '';
+    chip.innerHTML = `<span class="dot"></span>${w.tempF}°F · ${w.condition}${wetTag} · live via Open-Meteo`;
+  }catch(e){
+    console.error('Weather load error:', e);
+    currentWeather = { tempF:72, condition:'Unavailable', isWet:false, source:'unavailable' };
+    chip.innerHTML = `<span class="dot warn"></span>Live weather unavailable`;
+  }
+}
+loadWeather();
+
+/* ---------- RULES ENGINE ----------
+   Deterministic, auditable decision logic. The AI's job is to EXPLAIN and
+   communicate these decisions in natural language — not to invent the
+   decision itself. This keeps the system's actual judgment calls
+   transparent and testable, independent of the language model. */
+
+// Zone/crowd risk: capacity % + wet weather (wet weather pushes fans toward
+// covered concourses, raising effective congestion) -> risk tier + action.
+function classifyZoneRisk(pct, weather){
+  const wetPenalty = weather && weather.isWet ? 8 : 0;
+  const adjusted = Math.min(100, pct + wetPenalty);
+  if(adjusted >= 80) return { level:'high', action:'redirect', adjusted };
+  if(adjusted >= 55) return { level:'medium', action:'monitor', adjusted };
+  return { level:'low', action:'normal', adjusted };
+}
+
+// Incident severity -> fixed response protocol (steps are NOT AI-generated;
+// the AI only tailors phrasing to the specific incident text).
+const INCIDENT_PROTOCOLS = {
+  high: ['Dispatch nearest 2-person response team immediately', 'Notify shift supervisor and command center', 'Escalate to venue operations if unresolved in 5 min'],
+  med:  ['Dispatch nearest available volunteer', 'Log incident in shift tracker', 'Follow up within 10 min'],
+  low:  ['Note in shift log', 'Monitor, no immediate dispatch required'],
+};
+
+
 /* ---------- generic AI call ----------
    Goes through OUR OWN backend (/api/generate) so the NVIDIA NIM API key
    never touches the browser. See api/generate.js (Vercel) or server.js (Express). */
-async function callClaude(systemPrompt, userPrompt){
+async function callAI(systemPrompt, userPrompt){
   const response = await fetch("/api/generate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -296,12 +343,13 @@ async function sendChat(){
   const thinkingNode = chatLog.lastChild;
   try{
     const sys = `You are PulsePoint AI, the official venue concierge for MetLife Stadium during the FIFA World Cup 2026. Answer the fan's question helpfully and specifically about stadium navigation, gates, seating, accessibility, food, transport, or match-day logistics. Invent plausible, concrete venue details (gate letters, section numbers, walking times) since this is a live demo. Reply in ${currentLang}. Keep it to 2-4 short sentences, warm and practical tone.`;
-    const answer = await callClaude(sys, q);
+    const answer = await callAI(sys, q);
     chatLog.removeChild(thinkingNode);
     addMsg(answer,'ai','PulsePoint AI');
   }catch(e){
+    console.error('PulsePoint AI error:', e);
     chatLog.removeChild(thinkingNode);
-    addMsg('I ran into a connection issue — please try again in a moment.','ai','PulsePoint AI');
+    addMsg('I ran into a connection issue: ' + e.message,'ai','PulsePoint AI');
   }
   btn.disabled=false; btn.textContent='Ask';
 }
@@ -326,13 +374,25 @@ async function selectZone(i){
   document.getElementById('zone-'+i).classList.add('sel');
   const z=zones[i];
   const box=document.getElementById('zoneRec');
-  box.innerHTML='<span class="tag">Recommendation</span>Generating route guidance…';
-  const sys = "You are a stadium crowd-flow AI at MetLife Stadium during FIFA World Cup 2026. Given a zone name and its current capacity percentage, give a 2-sentence practical recommendation for a fan: whether to use this zone now or an alternative, and why. Be specific and concise.";
+
+  // 1. Deterministic decision — the rules engine decides, not the AI.
+  const risk = classifyZoneRisk(z.pct, currentWeather);
+
+  box.innerHTML = `<span class="tag">Rules engine: ${risk.level.toUpperCase()} risk → ${risk.action}</span>Generating explanation…`;
+
+  // 2. AI only explains/communicates the decision already made above.
+  const sys = "You are a stadium crowd-flow assistant at MetLife Stadium during FIFA World Cup 2026. A rules engine has ALREADY decided the risk level and action for a zone — your only job is to explain that decision to a fan in 2 short sentences: what to do and why, referencing capacity and weather if relevant. Do not contradict or change the decision you're given.";
+  const userPrompt = `Zone: ${z.name}. Raw capacity: ${z.pct}%. Weather-adjusted capacity: ${risk.adjusted}%. Decision already made by rules engine: risk=${risk.level}, action=${risk.action}. Current weather: ${currentWeather ? currentWeather.tempF+'°F, '+currentWeather.condition : 'unknown'}.`;
+
   try{
-    const answer = await callClaude(sys, `Zone: ${z.name}, current capacity: ${z.pct}%.`);
-    box.innerHTML = '<span class="tag">Recommendation</span>'+answer;
+    const answer = await callAI(sys, userPrompt);
+    box.innerHTML = `<span class="tag">Rules engine: ${risk.level.toUpperCase()} risk → ${risk.action}</span>`+answer;
   }catch(e){
-    box.innerHTML = '<span class="tag">Recommendation</span>Unable to fetch a live tip right now — as a general rule, avoid zones above 80% capacity and use the nearest alternate gate.';
+    console.error('PulsePoint AI error:', e);
+    const fallback = risk.action==='redirect' ? 'This zone is over threshold — use the nearest alternate gate.' :
+                      risk.action==='monitor' ? 'This zone is filling up — expect some wait, no need to reroute yet.' :
+                      'This zone is currently clear.';
+    box.innerHTML = `<span class="tag">Rules engine: ${risk.level.toUpperCase()} risk → ${risk.action}</span>`+fallback+' (AI explanation unavailable: '+e.message+')';
   }
 }
 
@@ -345,26 +405,37 @@ async function requestAccess(){
   out.innerHTML='<span class="tag">Assistance plan</span>Drafting…';
   const sys = "You are PulsePoint AI's accessibility coordinator for a FIFA World Cup 2026 stadium. Given an accessibility need and seating section, write a short, warm, concrete assistance plan (3-4 sentences): what will happen, roughly how long it takes, and how the fan will be met by a volunteer. Invent plausible details for this demo.";
   try{
-    const answer = await callClaude(sys, `Need: ${type}. Section: ${seat}.`);
+    const answer = await callAI(sys, `Need: ${type}. Section: ${seat}.`);
     out.innerHTML = '<span class="tag">Assistance plan · routed to volunteer team</span>'+answer;
   }catch(e){
+    console.error('PulsePoint AI error:', e);
     out.innerHTML = '<span class="tag">Assistance plan</span>A volunteer will meet you at your section shortly.';
   }
   btn.disabled=false; btn.textContent='Generate assistance plan';
 }
 
 /* ---------- sustainability ---------- */
+// Fixed relative carbon-impact tiers (rough, defensible ordering — not AI-invented).
+const CARBON_TIER = {
+  'Rideshare':'medium-high (single-occupancy trip)', 'Personal car':'high',
+  'Charter bus':'low (shared capacity)', 'Train / transit':'lowest',
+  'Walking / bike':'lowest',
+};
 async function getSustainTip(){
   const mode=document.getElementById('transMode').value;
   const btn=document.getElementById('sustainBtn'); btn.disabled=true; btn.textContent='Generating…';
   const out=document.getElementById('sustainOut'); out.style.display='block';
   out.innerHTML='<span class="tag">Greener option</span>Calculating…';
-  const sys = "You are a sustainability advisor for FIFA World Cup 2026 stadium transport. Given a fan's chosen transport mode, give a short 2-3 sentence response: an estimated relative carbon impact (low/medium/high, no need for exact figures), current wait/congestion context (invent plausibly), and one greener or faster alternative if relevant.";
+  const tier = CARBON_TIER[mode] || 'medium';
+  const weatherNote = currentWeather ? `${currentWeather.tempF}°F, ${currentWeather.condition}${currentWeather.isWet?' (wet)':''}` : 'unknown';
+  const sys = "You are a sustainability advisor for FIFA World Cup 2026 stadium transport. A fixed carbon-impact tier for the fan's transport mode is given to you — treat it as correct, don't re-estimate it. Given the mode, its carbon tier, and current real weather, write a short 2-3 sentence response: restate the carbon tier plainly, factor in how the real weather affects comfort/timing of that mode, and suggest one greener or more weather-appropriate alternative if relevant.";
+  const userPrompt = `Chosen transport mode: ${mode}. Carbon tier (fixed, not to be changed): ${tier}. Live weather at venue: ${weatherNote}.`;
   try{
-    const answer = await callClaude(sys, `Chosen transport mode: ${mode}.`);
-    out.innerHTML = '<span class="tag">Greener option</span>'+answer;
+    const answer = await callAI(sys, userPrompt);
+    out.innerHTML = '<span class="tag">Greener option · carbon tier: '+tier+'</span>'+answer;
   }catch(e){
-    out.innerHTML = '<span class="tag">Greener option</span>Transit and shuttle options generally have the lowest footprint post-match.';
+    console.error('PulsePoint AI error:', e);
+    out.innerHTML = '<span class="tag">Greener option · carbon tier: '+tier+'</span>Transit and shuttle options generally have the lowest footprint post-match. (AI explanation unavailable: '+e.message+')';
   }
   btn.disabled=false; btn.textContent='Get AI recommendation';
 }
@@ -393,13 +464,21 @@ async function getIncidentAction(){
   const it=incidents[incidentSelect.value];
   const btn=document.getElementById('incidentBtn'); btn.disabled=true; btn.textContent='Generating…';
   const out=document.getElementById('incidentOut'); out.style.display='block';
-  out.innerHTML='<span class="tag">Response plan</span>Drafting…';
-  const sys = "You are an operational decision-support AI for FIFA World Cup 2026 stadium command staff. Given an incident description and severity, produce a short structured response plan: 1) immediate action, 2) who to notify, 3) follow-up check. Keep it under 80 words, plain and directive, no markdown headers.";
+
+  // 1. Deterministic protocol — fixed steps per severity, defined in the rules engine above.
+  const protocol = INCIDENT_PROTOCOLS[it.sev] || INCIDENT_PROTOCOLS.med;
+  out.innerHTML = `<span class="tag">Fixed protocol (severity: ${it.sev})</span>Tailoring to this incident…`;
+
+  // 2. AI only tailors the fixed steps to this specific incident's wording — it cannot invent new steps.
+  const sys = "You are an operational decision-support assistant for FIFA World Cup 2026 stadium command staff. You are given a FIXED response protocol (a list of steps) that has already been decided by policy for this severity level. Rewrite those exact steps as a short, specific, directive message for this particular incident — do not add, remove, or reorder steps. Under 70 words, plain language, no markdown.";
+  const userPrompt = `Incident: ${it.txt}\nSeverity: ${it.sev}\nFixed protocol steps (do not change): ${protocol.join(' | ')}`;
+
   try{
-    const answer = await callClaude(sys, `Severity: ${it.sev}. Incident: ${it.txt}`);
-    out.innerHTML = '<span class="tag">Response plan</span>'+answer;
+    const answer = await callAI(sys, userPrompt);
+    out.innerHTML = `<span class="tag">Fixed protocol (severity: ${it.sev})</span>`+answer;
   }catch(e){
-    out.innerHTML = '<span class="tag">Response plan</span>Dispatch nearest volunteer team, notify shift supervisor, and confirm resolution within 10 minutes.';
+    console.error('PulsePoint AI error:', e);
+    out.innerHTML = `<span class="tag">Fixed protocol (severity: ${it.sev})</span>`+protocol.join('. ')+'. (AI phrasing unavailable: '+e.message+')';
   }
   btn.disabled=false; btn.textContent='Get AI response plan';
 }
@@ -408,13 +487,22 @@ async function generateBriefing(){
   const btn=document.getElementById('briefBtn'); btn.disabled=true; btn.textContent='Generating…';
   const out=document.getElementById('briefOut'); out.style.display='block';
   out.innerHTML='<span class="tag">Shift briefing</span>Summarizing feed…';
-  const sys = "You are an operational intelligence AI summarizing a stadium's live incident feed for the next volunteer shift at a FIFA World Cup 2026 venue. Given a list of incidents, write a concise 3-4 sentence shift handoff briefing: overall status, top priority, and one proactive suggestion.";
+
+  // Deterministic top-priority pick: highest severity, most recent, wins — not left to the AI to guess.
+  const sevRank = { high:3, med:2, low:1 };
+  const topIncident = [...incidents].sort((a,b)=>sevRank[b.sev]-sevRank[a.sev])[0];
+  const weatherNote = currentWeather ? `${currentWeather.tempF}°F, ${currentWeather.condition}${currentWeather.isWet?' (wet — expect concourse crowding)':''}` : 'unknown';
+
+  const sys = "You are an operational intelligence assistant summarizing a stadium's live incident feed for the next volunteer shift at a FIFA World Cup 2026 venue. You are told which incident is the top priority (already determined by severity ranking, not by you) and the real current weather. Write a concise 3-4 sentence shift handoff briefing: overall status, restate the given top priority, and one proactive suggestion informed by the weather.";
   const list = incidents.map(i=>`[${i.sev}] ${i.txt} (${i.time})`).join('\n');
+  const userPrompt = `Incidents:\n${list}\n\nTop priority (already determined): ${topIncident.txt}\nLive weather: ${weatherNote}`;
+
   try{
-    const answer = await callClaude(sys, list);
+    const answer = await callAI(sys, userPrompt);
     out.innerHTML = '<span class="tag">Shift briefing</span>'+answer;
   }catch(e){
-    out.innerHTML = '<span class="tag">Shift briefing</span>Overall status stable. Priority: relieve Gate C congestion. Suggest opening auxiliary bag-check lane 4 proactively.';
+    console.error('PulsePoint AI error:', e);
+    out.innerHTML = '<span class="tag">Shift briefing</span>Top priority: '+topIncident.txt+' (AI summary unavailable: '+e.message+')';
   }
   btn.disabled=false; btn.textContent='Generate AI shift briefing';
 }
