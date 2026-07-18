@@ -66,18 +66,6 @@ Being upfront about what's still simulated vs. real:
   doesn't contradict the rules engine's `action` field, with a fallback to
   the plain-text version if it does.
 
-## Getting a free API key
-
-1. Go to **build.nvidia.com** and sign in with a free account.
-2. Open any model card, e.g. **Llama 3.1 8B Instruct**.
-3. Click **Get API Key** — it starts with `nvapi-`.
-4. You get free inference credits and a 40 requests/minute rate limit, no
-   credit card and no GPU required. Plenty for a hackathon demo.
-
-Note: NVIDIA's free tier is for development, testing, and evaluation —
-not for production traffic with real end users. That's exactly what a
-hackathon demo is, so you're covered.
-
 ## Architecture
 
 ```
@@ -96,46 +84,6 @@ your own `/api/generate` and `/api/weather` endpoints. Decisions (zone risk,
 incident protocol, top priority) are computed client-side by the rules
 engine in `index.html` *before* either endpoint is called for explanation text.
 
-## Option A — Deploy to Vercel (recommended, ~2 minutes)
-
-1. Push this folder to a GitHub repo (or drag-and-drop it in the Vercel
-   dashboard).
-2. Go to vercel.com → **New Project** → import the repo.
-3. In **Settings → Environment Variables**, add:
-   - `NVIDIA_API_KEY` = your key from build.nvidia.com (starts with `nvapi-`)
-   - optionally `NIM_MODEL` = a different model ID from build.nvidia.com/models
-4. Deploy. Vercel auto-detects `index.html` as the static site and
-   `api/generate.js` + `api/weather.js` as serverless functions — no config file needed.
-5. Open the deployed URL. Done.
-
-CLI alternative:
-```bash
-npm i -g vercel
-vercel login
-vercel --prod
-# then set the env var:
-vercel env add NVIDIA_API_KEY
-```
-
-## Option B — Deploy to Render / Railway / any Node host
-
-These use `server.js` (plain Express) instead of the `api/` serverless
-function.
-
-1. Set the start command to `npm start` (runs `node server.js`).
-2. Set the environment variable `NVIDIA_API_KEY` in the host's dashboard.
-3. Deploy. The app serves `index.html`, `/api/generate`, and `/api/weather`
-   from the same process.
-
-## Option C — Run locally
-
-```bash
-npm install
-cp .env.example .env
-# edit .env and paste your NVIDIA_API_KEY
-npm start
-# open http://localhost:3000
-```
 
 ## Project structure
 
