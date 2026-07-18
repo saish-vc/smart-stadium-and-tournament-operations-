@@ -10,7 +10,7 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const NVIDIA_API_KEY = process.env.NVIDIA_API_KEY;
-const NIM_MODEL = process.env.NIM_MODEL || 'meta/llama-3.3-70b-instruct';
+const NIM_MODEL = process.env.NIM_MODEL || 'meta/llama-3.1-8b-instruct';
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname))); // serves index.html
@@ -28,6 +28,9 @@ app.post('/api/generate', async (req, res) => {
   if (system) messages.push({ role: 'system', content: system });
   messages.push({ role: 'user', content: prompt });
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
   try {
     const nimRes = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
       method: 'POST',
@@ -41,16 +44,22 @@ app.post('/api/generate', async (req, res) => {
         max_tokens: 600,
         temperature: 0.6,
       }),
+      signal: controller.signal,
     });
 
+    clearTimeout(timeoutId);
     const data = await nimRes.json();
     if (!nimRes.ok) {
+      console.error('NVIDIA NIM API error response:', data);
       return res.status(nimRes.status).json({ error: data?.error?.message || data?.error || 'NVIDIA NIM API error' });
     }
     const text = data?.choices?.[0]?.message?.content || '';
     res.json({ text });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Unexpected server error' });
+    clearTimeout(timeoutId);
+    console.error('Error generating response:', err);
+    const isTimeout = err.name === 'AbortError';
+    res.status(500).json({ error: isTimeout ? 'NVIDIA NIM API request timed out' : (err.message || 'Unexpected server error') });
   }
 });
 
