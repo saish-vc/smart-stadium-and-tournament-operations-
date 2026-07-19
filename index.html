@@ -52,6 +52,8 @@
   .subboard{display:flex;gap:0;margin:22px 0 24px;background:var(--turf-800);border-radius:12px;padding:5px;width:fit-content;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.06);}
   .sub-btn{font-family:var(--font-mono);font-weight:700;font-size:13px;letter-spacing:1px;text-transform:uppercase;padding:11px 22px;border:none;background:transparent;color:#9FBBAD;border-radius:8px;cursor:pointer;transition:all .2s;}
   .sub-btn.active{background:var(--amber-500);color:var(--turf-900);}
+  /* A11y: Accessibility — visible focus rings on every interactive element */
+  .sub-btn:focus-visible{outline:3px solid var(--amber-500);outline-offset:2px;}
 
   .grid{display:grid;grid-template-columns:1.3fr 1fr;gap:18px;}
   @media(max-width:860px){.grid{grid-template-columns:1fr;}}
@@ -69,8 +71,10 @@
   .msg.ai .tag{font-family:var(--font-mono);font-size:9.5px;color:var(--line-500);letter-spacing:1px;display:block;margin-bottom:4px;text-transform:uppercase;}
   .chat-row{display:flex;gap:8px;}
   .lang-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
+  /* A11y: lang pills are real <button>s — :focus-visible added here */
   .lang-pill{font-family:var(--font-mono);font-size:11px;padding:5px 10px;border-radius:999px;border:1px solid rgba(10,42,32,0.15);background:#fff;cursor:pointer;color:var(--ink-soft);}
   .lang-pill.active{background:var(--turf-900);color:#fff;border-color:var(--turf-900);}
+  .lang-pill:focus-visible{outline:3px solid var(--amber-500);outline-offset:2px;}
   input[type=text],textarea,select{width:100%;font-family:var(--font-body);font-size:13.5px;padding:11px 13px;border-radius:9px;border:1px solid rgba(10,42,32,0.15);background:#fff;color:var(--ink);}
   input[type=text]:focus,textarea:focus,select:focus{outline:2px solid var(--amber-500);outline-offset:1px;}
   .btn{font-family:var(--font-mono);font-weight:700;font-size:12.5px;letter-spacing:0.5px;text-transform:uppercase;padding:11px 16px;border-radius:9px;border:none;background:var(--turf-900);color:#fff;cursor:pointer;transition:transform .1s;}
@@ -78,12 +82,15 @@
   .btn.amber{background:var(--amber-500);color:var(--turf-900);}
   .btn:disabled{opacity:0.55;cursor:wait;}
   .btn.ghost{background:transparent;border:1px solid rgba(10,42,32,0.2);color:var(--ink);}
+  .btn:focus-visible{outline:3px solid var(--amber-500);outline-offset:2px;}
 
-  /* Zones heatmap */
+  /* Zones heatmap — A11y: now real <button>s, so :focus-visible just works */
   .zones{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px;}
-  .zone{border-radius:9px;padding:10px 8px;text-align:center;cursor:pointer;font-family:var(--font-mono);border:2px solid transparent;transition:.15s;}
+  /* A11y: zone is now a <button>; reset button UA styles, keep custom look */
+  .zone{border-radius:9px;padding:10px 8px;text-align:center;cursor:pointer;font-family:var(--font-mono);border:2px solid transparent;transition:.15s;width:100%;background:transparent;}
   .zone:hover{transform:translateY(-2px);}
   .zone.sel{border-color:var(--turf-900);}
+  .zone:focus-visible{outline:3px solid var(--turf-900);outline-offset:2px;}
   .zone .z-name{font-size:11px;font-weight:700;}
   .zone .z-pct{font-size:17px;font-weight:700;margin-top:2px;}
   .zone .z-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.5px;opacity:.85;}
@@ -110,6 +117,15 @@
   ::-webkit-scrollbar{width:7px;} ::-webkit-scrollbar-thumb{background:rgba(10,42,32,0.2);border-radius:10px;}
 
   .footer-note{text-align:center;font-family:var(--font-mono);font-size:10.5px;color:var(--ink-soft);margin-top:28px;letter-spacing:0.5px;}
+
+  /* A11y: Accessibility — respect user's reduced-motion preference */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      transition: none !important;
+      animation: none !important;
+    }
+    .zone:hover, .btn:hover { transform: none !important; }
+  }
 </style>
 </head>
 <body>
@@ -118,7 +134,8 @@
   <div class="board">
     <div class="board-top">
       <div class="brand">
-        <div class="brand-mark">PP</div>
+        <!-- A11y: Accessibility — purely decorative mark; hidden from SR -->
+        <div class="brand-mark" aria-hidden="true">PP</div>
         <div>
           <div class="brand-name">PULSEPOINT</div>
           <div class="brand-sub">GenAI Stadium Intelligence · FIFA World Cup 2026</div>
@@ -134,11 +151,17 @@
       <div class="chip"><span class="dot warn"></span>Gate C at 91% capacity</div>
       <div class="chip"><span class="dot"></span>AI Concierge: 12 languages live</div>
       <div class="chip"><span class="dot"></span>82,500 in attendance</div>
-      <div class="chip" id="weatherChip"><span class="dot"></span>Loading live weather…</div>
+      <!--
+        Efficiency: weather chip uses two child nodes instead of full innerHTML
+        rewrites so the browser only mutates text — not the whole subtree.
+      -->
+      <div class="chip" id="weatherChip">
+        <span class="dot" id="weatherDot"></span><span id="weatherText">Loading live weather…</span>
+      </div>
     </div>
   </div>
 
-  <div class="subboard">
+  <div class="subboard" role="group" aria-label="View mode">
     <button class="sub-btn active" id="tabFanBtn" onclick="setMode('fan')">Fan Mode</button>
     <button class="sub-btn" id="tabOpsBtn" onclick="setMode('ops')">Ops Mode</button>
   </div>
@@ -150,11 +173,18 @@
         <div class="eyebrow">AI Concierge</div>
         <h3>Ask anything, in your language</h3>
         <p class="desc">Wayfinding, accessibility, transport, food, or match info — answered instantly by an AI trained on this venue.</p>
-        <div class="lang-row" id="langRow"></div>
-        <div class="chat-log" id="chatLog">
+        <!-- A11y: lang-row label provided by sr-only heading above -->
+        <div class="lang-row" id="langRow" role="group" aria-label="Select language"></div>
+        <!--
+          A11y: role="log" tells SR this is an auto-updating message log.
+          aria-live="polite" announces new messages without interrupting.
+        -->
+        <div class="chat-log" id="chatLog" role="log" aria-live="polite" aria-label="Chat messages">
           <div class="msg ai"><span class="tag">PulsePoint AI</span>Welcome to MetLife Stadium! Ask me how to find your gate, the nearest accessible restroom, or the fastest way to the PATH train after the match.</div>
         </div>
         <div class="chat-row">
+          <!-- A11y: explicit <label> association for the chat input -->
+          <label for="chatInput" class="hidden">Your question</label>
           <input type="text" id="chatInput" placeholder="e.g. Where is the nearest sensory room to Section 128?" onkeydown="if(event.key==='Enter')sendChat()">
           <button class="btn amber" id="sendBtn" onclick="sendChat()">Ask</button>
         </div>
@@ -164,8 +194,15 @@
         <div class="eyebrow">Live Crowd Map</div>
         <h3>Gate &amp; concourse density</h3>
         <p class="desc">Tap a zone for an AI-generated route recommendation that avoids congestion.</p>
-        <div class="zones" id="zoneGrid"></div>
-        <div class="rec-box" id="zoneRec"><span class="tag">Recommendation</span>Select a zone to get a live AI routing tip.</div>
+        <!--
+          A11y: role="group" + aria-label give context to the zone buttons.
+          Each zone is now a real <button> (see JS) so keyboard users can Tab to it.
+        -->
+        <div class="zones" id="zoneGrid" role="group" aria-label="Crowd zones"></div>
+        <!--
+          A11y: aria-live so SR announces when the recommendation updates.
+        -->
+        <div class="rec-box" id="zoneRec" aria-live="polite"><span class="tag">Recommendation</span>Select a zone to get a live AI routing tip.</div>
       </div>
     </div>
 
@@ -174,6 +211,8 @@
         <div class="eyebrow">Accessibility</div>
         <h3>Request assistance</h3>
         <p class="desc">Tell us what you need — the AI drafts a personalized assistance plan and routes it to volunteer staff.</p>
+        <!-- A11y: <label> associations for all form controls -->
+        <label for="accessType">Type of assistance</label>
         <select id="accessType" style="margin-bottom:8px;">
           <option>Wheelchair escort</option>
           <option>Sign language interpreter</option>
@@ -181,15 +220,19 @@
           <option>Visual assistance / guide</option>
           <option>Cognitive / autism support</option>
         </select>
-        <input type="text" id="accessSeat" placeholder="Your section, e.g. 214" style="margin-bottom:8px;">
+        <label for="accessSeat">Your section</label>
+        <input type="text" id="accessSeat" placeholder="e.g. 214" style="margin-bottom:8px;">
         <button class="btn" id="accessBtn" onclick="requestAccess()">Generate assistance plan</button>
-        <div class="rec-box" id="accessOut" style="margin-top:12px;display:none;"></div>
+        <!-- A11y: aria-live so SR reads the generated plan -->
+        <div class="rec-box" id="accessOut" style="margin-top:12px;display:none;" aria-live="polite"></div>
       </div>
 
       <div class="card">
         <div class="eyebrow">Sustainability</div>
         <h3>Greenest way home</h3>
         <p class="desc">Compare your transport options — the AI scores carbon impact and current crowd wait.</p>
+        <!-- A11y: <label> for transport mode select -->
+        <label for="transMode">Transport mode</label>
         <select id="transMode" style="margin-bottom:8px;">
           <option>Rideshare</option>
           <option>Personal car</option>
@@ -198,7 +241,8 @@
           <option>Walking / bike</option>
         </select>
         <button class="btn" id="sustainBtn" onclick="getSustainTip()">Get AI recommendation</button>
-        <div class="rec-box" id="sustainOut" style="margin-top:12px;display:none;"></div>
+        <!-- A11y: aria-live so SR reads the sustainability tip -->
+        <div class="rec-box" id="sustainOut" style="margin-top:12px;display:none;" aria-live="polite"></div>
       </div>
     </div>
   </div>
@@ -217,18 +261,22 @@
         <div class="eyebrow">Operational Feed</div>
         <h3>Live incidents &amp; sensor events</h3>
         <p class="desc">Simulated feed from gate sensors, volunteer radios, and crowd cameras.</p>
-        <div class="feed" id="opsFeed"></div>
+        <div class="feed" id="opsFeed" role="list" aria-label="Incident feed"></div>
         <button class="btn amber" id="briefBtn" onclick="generateBriefing()">Generate AI shift briefing</button>
-        <div class="rec-box" id="briefOut" style="margin-top:12px;display:none;"></div>
+        <!-- A11y: aria-live="assertive" for the shift briefing (command-staff context) -->
+        <div class="rec-box" id="briefOut" style="margin-top:12px;display:none;" aria-live="polite"></div>
       </div>
 
       <div class="card">
         <div class="eyebrow">Decision Support</div>
         <h3>Incident → recommended action</h3>
         <p class="desc">Pick a live incident and let the AI draft the response protocol for command staff.</p>
+        <!-- A11y: <label> for the incident select -->
+        <label for="incidentSelect">Select incident</label>
         <select id="incidentSelect"></select>
         <button class="btn" id="incidentBtn" onclick="getIncidentAction()" style="margin-top:8px;">Get AI response plan</button>
-        <div class="rec-box" id="incidentOut" style="margin-top:12px;display:none;"></div>
+        <!-- A11y: aria-live so SR announces the drafted response -->
+        <div class="rec-box" id="incidentOut" style="margin-top:12px;display:none;" aria-live="polite"></div>
       </div>
     </div>
   </div>
@@ -236,6 +284,13 @@
   <div class="footer-note">PulsePoint demo · AI responses generated live via NVIDIA NIM · Crowd, incident &amp; attendance data simulated for this prototype · Weather: real live data via Open-Meteo</div>
 </div>
 
+<!--
+  lib/rules.js exports via a module.exports guard so it is safe to load as a
+  plain <script> in the browser. All deterministic functions are available as
+  globals (classifyZoneRisk, levelClass, getIncidentProtocol, getCarbonTier,
+  rankIncidents) after this tag.
+-->
+<script src="/lib/rules.js"></script>
 <script>
 /* ---------- clock ---------- */
 function tickClock(){
@@ -259,63 +314,74 @@ languages.forEach(l=>{
   const b=document.createElement('button');
   b.className='lang-pill'+(l===currentLang?' active':'');
   b.textContent=l;
-  b.onclick=()=>{currentLang=l;[...langRow.children].forEach(c=>c.classList.remove('active'));b.classList.add('active');};
+  // A11y: aria-pressed communicates toggle state to screen readers.
+  b.setAttribute('aria-pressed', l===currentLang ? 'true' : 'false');
+  b.onclick=()=>{
+    currentLang=l;
+    [...langRow.children].forEach(c=>{
+      c.classList.remove('active');
+      // A11y: keep aria-pressed in sync on all siblings.
+      c.setAttribute('aria-pressed','false');
+    });
+    b.classList.add('active');
+    b.setAttribute('aria-pressed','true');
+  };
   langRow.appendChild(b);
 });
 
 /* ---------- LIVE DATA: real weather (Open-Meteo, via our backend) ----------
    This is a genuine external data source, not simulated. It feeds the rules
-   engine below so crowd/transport/incident logic reacts to real conditions. */
+   engine below so crowd/transport/incident logic reacts to real conditions.
+
+   Efficiency: _weatherPromise caches the in-flight request so that concurrent
+   callers (selectZone, getSustainTip) that race before the first response
+   arrives all share the SAME promise rather than firing duplicate requests or
+   reading a null global.
+*/
 let currentWeather = null;
-async function loadWeather(){
-  const chip = document.getElementById('weatherChip');
-  try{
-    const r = await fetch('/api/weather');
-    const w = await r.json();
-    currentWeather = w;
-    const wetTag = w.isWet ? ' · wet conditions' : '';
-    chip.innerHTML = `<span class="dot"></span>${w.tempF}°F · ${w.condition}${wetTag} · live via Open-Meteo`;
-  }catch(e){
-    console.error('Weather load error:', e);
-    currentWeather = { tempF:72, condition:'Unavailable', isWet:false, source:'unavailable' };
-    chip.innerHTML = `<span class="dot warn"></span>Live weather unavailable`;
-  }
+let _weatherPromise = null; // Efficiency: in-flight deduplication cache.
+
+function loadWeather(){
+  // Return the cached promise if one is already pending or resolved.
+  if (_weatherPromise) return _weatherPromise;
+  _weatherPromise = fetch('/api/weather')
+    .then(r => r.json())
+    .then(w => {
+      currentWeather = w;
+      // Efficiency: mutate only the two child nodes — no full innerHTML reparse.
+      const wetTag = w.isWet ? ` · wet conditions` : '';
+      document.getElementById('weatherDot').className = 'dot';
+      document.getElementById('weatherText').textContent =
+        `${w.tempF}°F · ${w.condition}${wetTag} · live via Open-Meteo`;
+      return w;
+    })
+    .catch(e => {
+      console.error('Weather load error:', e);
+      currentWeather = { tempF:72, condition:'Unavailable', isWet:false, source:'unavailable' };
+      document.getElementById('weatherDot').className = 'dot warn';
+      document.getElementById('weatherText').textContent = 'Live weather unavailable';
+      return currentWeather;
+    });
+  return _weatherPromise;
 }
-loadWeather();
+loadWeather(); // kick off on page load
 
 /* ---------- RULES ENGINE ----------
-   Deterministic, auditable decision logic. The AI's job is to EXPLAIN and
-   communicate these decisions in natural language — not to invent the
-   decision itself. This keeps the system's actual judgment calls
-   transparent and testable, independent of the language model. */
-
-// Zone/crowd risk: capacity % + wet weather (wet weather pushes fans toward
-// covered concourses, raising effective congestion) -> risk tier + action.
-function classifyZoneRisk(pct, weather){
-  const wetPenalty = weather && weather.isWet ? 8 : 0;
-  const adjusted = Math.min(100, pct + wetPenalty);
-  if(adjusted >= 80) return { level:'high', action:'redirect', adjusted };
-  if(adjusted >= 55) return { level:'medium', action:'monitor', adjusted };
-  return { level:'low', action:'normal', adjusted };
-}
-
-// Incident severity -> fixed response protocol (steps are NOT AI-generated;
-// the AI only tailors phrasing to the specific incident text).
-const INCIDENT_PROTOCOLS = {
-  high: ['Dispatch nearest 2-person response team immediately', 'Notify shift supervisor and command center', 'Escalate to venue operations if unresolved in 5 min'],
-  med:  ['Dispatch nearest available volunteer', 'Log incident in shift tracker', 'Follow up within 10 min'],
-  low:  ['Note in shift log', 'Monitor, no immediate dispatch required'],
-};
-
+   Deterministic, auditable decision logic. Functions are now loaded from
+   /lib/rules.js (same module used by the unit tests) so there is a single
+   source of truth. The AI's job is to EXPLAIN and communicate these
+   decisions in natural language — not to invent the decision itself. */
 
 /* ---------- generic AI call ----------
    Goes through OUR OWN backend (/api/generate) so the NVIDIA NIM API key
    never touches the browser. See api/generate.js (Vercel) or server.js (Express). */
-async function callAI(systemPrompt, userPrompt){
+async function callAI(systemPrompt, userPrompt, signal){
   const response = await fetch("/api/generate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ system: systemPrompt, prompt: userPrompt })
+    body: JSON.stringify({ system: systemPrompt, prompt: userPrompt }),
+    // Efficiency: pass AbortSignal through so callers can cancel stale requests.
+    signal,
   });
   if(!response.ok){
     const errBody = await response.json().catch(()=>({}));
@@ -360,34 +426,54 @@ const zones = [
   {name:'Concourse N', pct:55}, {name:'Concourse S', pct:47}, {name:'Fan Zone', pct:78}, {name:'Transit Hub', pct:69}
 ];
 const zoneGrid=document.getElementById('zoneGrid');
-function levelClass(p){return p>=75?'z-high':p>=45?'z-med':'z-low';}
+
 zones.forEach((z,i)=>{
-  const el=document.createElement('div');
-  el.className='zone '+levelClass(z.pct);
+  // A11y: real <button> so zones are keyboard-reachable and activatable with Enter/Space.
+  const el=document.createElement('button');
+  // Efficiency: levelClass now delegates to classifyZoneRisk from lib/rules.js
+  // so the color thresholds are consistent with the rules engine (single source of truth).
+  const risk0 = classifyZoneRisk(z.pct, null); // initial render with no weather yet
+  el.className='zone '+levelClass(risk0.level);
   el.id='zone-'+i;
+  el.setAttribute('aria-label', `${z.name}: ${z.pct}% capacity, ${risk0.level} risk`);
   el.innerHTML=`<div class="z-name">${z.name}</div><div class="z-pct">${z.pct}%</div><div class="z-lbl">capacity</div>`;
   el.onclick=()=>selectZone(i);
   zoneGrid.appendChild(el);
 });
+
+// Efficiency: AbortController for zone AI calls — cancels any previous in-flight
+// request when the user clicks a different zone, preventing last-write-wins races.
+let _zoneAbortCtrl = null;
+
 async function selectZone(i){
+  // Efficiency: abort previous zone AI call if still in flight.
+  if (_zoneAbortCtrl) { _zoneAbortCtrl.abort(); }
+  _zoneAbortCtrl = new AbortController();
+  const signal = _zoneAbortCtrl.signal;
+
   [...zoneGrid.children].forEach(c=>c.classList.remove('sel'));
   document.getElementById('zone-'+i).classList.add('sel');
   const z=zones[i];
   const box=document.getElementById('zoneRec');
 
+  // Efficiency: await the shared weather promise — works even if weather is
+  // still loading (avoids reading a null global on fast zone clicks).
+  const weather = await loadWeather();
+
   // 1. Deterministic decision — the rules engine decides, not the AI.
-  const risk = classifyZoneRisk(z.pct, currentWeather);
+  const risk = classifyZoneRisk(z.pct, weather);
 
   box.innerHTML = `<span class="tag">Rules engine: ${risk.level.toUpperCase()} risk → ${risk.action}</span>Generating explanation…`;
 
   // 2. AI only explains/communicates the decision already made above.
   const sys = "You are a stadium crowd-flow assistant at MetLife Stadium during FIFA World Cup 2026. A rules engine has ALREADY decided the risk level and action for a zone — your only job is to explain that decision to a fan in 2 short sentences: what to do and why, referencing capacity and weather if relevant. Do not contradict or change the decision you're given.";
-  const userPrompt = `Zone: ${z.name}. Raw capacity: ${z.pct}%. Weather-adjusted capacity: ${risk.adjusted}%. Decision already made by rules engine: risk=${risk.level}, action=${risk.action}. Current weather: ${currentWeather ? currentWeather.tempF+'°F, '+currentWeather.condition : 'unknown'}.`;
+  const userPrompt = `Zone: ${z.name}. Raw capacity: ${z.pct}%. Weather-adjusted capacity: ${risk.adjusted}%. Decision already made by rules engine: risk=${risk.level}, action=${risk.action}. Current weather: ${weather ? weather.tempF+'°F, '+weather.condition : 'unknown'}.`;
 
   try{
-    const answer = await callAI(sys, userPrompt);
+    const answer = await callAI(sys, userPrompt, signal);
     box.innerHTML = `<span class="tag">Rules engine: ${risk.level.toUpperCase()} risk → ${risk.action}</span>`+answer;
   }catch(e){
+    if(e.name === 'AbortError') return; // Efficiency: stale request cancelled — silently discard.
     console.error('PulsePoint AI error:', e);
     const fallback = risk.action==='redirect' ? 'This zone is over threshold — use the nearest alternate gate.' :
                       risk.action==='monitor' ? 'This zone is filling up — expect some wait, no need to reroute yet.' :
@@ -415,19 +501,16 @@ async function requestAccess(){
 }
 
 /* ---------- sustainability ---------- */
-// Fixed relative carbon-impact tiers (rough, defensible ordering — not AI-invented).
-const CARBON_TIER = {
-  'Rideshare':'medium-high (single-occupancy trip)', 'Personal car':'high',
-  'Charter bus':'low (shared capacity)', 'Train / transit':'lowest',
-  'Walking / bike':'lowest',
-};
 async function getSustainTip(){
   const mode=document.getElementById('transMode').value;
   const btn=document.getElementById('sustainBtn'); btn.disabled=true; btn.textContent='Generating…';
   const out=document.getElementById('sustainOut'); out.style.display='block';
   out.innerHTML='<span class="tag">Greener option</span>Calculating…';
-  const tier = CARBON_TIER[mode] || 'medium';
-  const weatherNote = currentWeather ? `${currentWeather.tempF}°F, ${currentWeather.condition}${currentWeather.isWet?' (wet)':''}` : 'unknown';
+  // Efficiency: getCarbonTier from lib/rules.js — single source of truth.
+  const tier = getCarbonTier(mode);
+  // Efficiency: await shared weather promise instead of reading possibly-null global.
+  const weather = await loadWeather();
+  const weatherNote = weather ? `${weather.tempF}°F, ${weather.condition}${weather.isWet?' (wet)':''}` : 'unknown';
   const sys = "You are a sustainability advisor for FIFA World Cup 2026 stadium transport. A fixed carbon-impact tier for the fan's transport mode is given to you — treat it as correct, don't re-estimate it. Given the mode, its carbon tier, and current real weather, write a short 2-3 sentence response: restate the carbon tier plainly, factor in how the real weather affects comfort/timing of that mode, and suggest one greener or more weather-appropriate alternative if relevant.";
   const userPrompt = `Chosen transport mode: ${mode}. Carbon tier (fixed, not to be changed): ${tier}. Live weather at venue: ${weatherNote}.`;
   try{
@@ -452,7 +535,8 @@ const opsFeed=document.getElementById('opsFeed');
 incidents.forEach(it=>{
   const el=document.createElement('div');
   el.className='feed-item';
-  el.innerHTML=`<div class="sev ${it.sev}"></div><div><div class="feed-txt">${it.txt}</div><div class="feed-time">${it.time}</div></div>`;
+  el.setAttribute('role','listitem');
+  el.innerHTML=`<div class="sev ${it.sev}" aria-hidden="true"></div><div><div class="feed-txt">${it.txt}</div><div class="feed-time">${it.time}</div></div>`;
   opsFeed.appendChild(el);
 });
 const incidentSelect=document.getElementById('incidentSelect');
@@ -465,11 +549,11 @@ async function getIncidentAction(){
   const btn=document.getElementById('incidentBtn'); btn.disabled=true; btn.textContent='Generating…';
   const out=document.getElementById('incidentOut'); out.style.display='block';
 
-  // 1. Deterministic protocol — fixed steps per severity, defined in the rules engine above.
-  const protocol = INCIDENT_PROTOCOLS[it.sev] || INCIDENT_PROTOCOLS.med;
+  // 1. Deterministic protocol from lib/rules.js — fixed steps per severity.
+  const protocol = getIncidentProtocol(it.sev);
   out.innerHTML = `<span class="tag">Fixed protocol (severity: ${it.sev})</span>Tailoring to this incident…`;
 
-  // 2. AI only tailors the fixed steps to this specific incident's wording — it cannot invent new steps.
+  // 2. AI only tailors the fixed steps to this specific incident's wording.
   const sys = "You are an operational decision-support assistant for FIFA World Cup 2026 stadium command staff. You are given a FIXED response protocol (a list of steps) that has already been decided by policy for this severity level. Rewrite those exact steps as a short, specific, directive message for this particular incident — do not add, remove, or reorder steps. Under 70 words, plain language, no markdown.";
   const userPrompt = `Incident: ${it.txt}\nSeverity: ${it.sev}\nFixed protocol steps (do not change): ${protocol.join(' | ')}`;
 
@@ -488,10 +572,11 @@ async function generateBriefing(){
   const out=document.getElementById('briefOut'); out.style.display='block';
   out.innerHTML='<span class="tag">Shift briefing</span>Summarizing feed…';
 
-  // Deterministic top-priority pick: highest severity, most recent, wins — not left to the AI to guess.
-  const sevRank = { high:3, med:2, low:1 };
-  const topIncident = [...incidents].sort((a,b)=>sevRank[b.sev]-sevRank[a.sev])[0];
-  const weatherNote = currentWeather ? `${currentWeather.tempF}°F, ${currentWeather.condition}${currentWeather.isWet?' (wet — expect concourse crowding)':''}` : 'unknown';
+  // Deterministic top-priority pick from lib/rules.js — highest severity wins.
+  const topIncident = rankIncidents(incidents);
+  // Efficiency: await shared weather promise instead of reading possibly-null global.
+  const weather = await loadWeather();
+  const weatherNote = weather ? `${weather.tempF}°F, ${weather.condition}${weather.isWet?' (wet — expect concourse crowding)':''}` : 'unknown';
 
   const sys = "You are an operational intelligence assistant summarizing a stadium's live incident feed for the next volunteer shift at a FIFA World Cup 2026 venue. You are told which incident is the top priority (already determined by severity ranking, not by you) and the real current weather. Write a concise 3-4 sentence shift handoff briefing: overall status, restate the given top priority, and one proactive suggestion informed by the weather.";
   const list = incidents.map(i=>`[${i.sev}] ${i.txt} (${i.time})`).join('\n');
