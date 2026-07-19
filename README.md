@@ -127,4 +127,4 @@ pulsepoint-worldcup2026/
 
 ## Live demo
 
-Deployed at: **https://pulsepoint-worldcup2026.vercel.app**
+Deployed at: **[https://pulsepoint-worldcup2026.vercel.app](https://smart-stadium-and-tournament-operations-oqvaz74up-s1mp1e.vercel.app/)**
