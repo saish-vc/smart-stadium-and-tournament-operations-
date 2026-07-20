@@ -13,7 +13,7 @@ fan experience during the FIFA World Cup 2026. It has two modes:
   structured response plan.
 
 All AI content (chat replies, routing tips, briefings, response plans) is
-generated live by an LLM via **NVIDIA NIM** (free, no credit card). Crowd
+generated live by an LLM via **Open Ai **. Crowd
 and incident *events* are simulated for the demo, but weather is **real,
 live data**, and the actual decisions (risk level, dispatch protocol, top
 priority) are made by a deterministic rules engine — not the AI. The AI's
@@ -91,7 +91,7 @@ engine in `index.html` *before* either endpoint is called for explanation text.
 pulsepoint-worldcup2026/
 ├── index.html          # entire frontend (UI + client logic + rules engine)
 ├── api/
-│   ├── generate.js     # Vercel serverless proxy to NVIDIA NIM
+│   ├── generate.js     # Vercel serverless proxy to open ai
 │   └── weather.js      # Vercel serverless proxy to Open-Meteo (no key needed)
 ├── server.js           # Express proxy (local / Render / Railway)
 ├── package.json
